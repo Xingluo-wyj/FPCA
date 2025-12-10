@@ -39,7 +39,7 @@ mutable struct StructDerivativeInfo{Tf}
 end
 function StructDerivativeInfo(M, x::Vector{Tf}) where {Tf}
     n = length(x)
-    p = manifold_codim(M)
+    p = manifold_codim(M)+1
     return StructDerivativeInfo(
         zeros(Tf, n),
         zeros(Tf, p),
@@ -58,24 +58,27 @@ function oracles_firstorder!(di::FirstOrderDerivativeInfo{Tf}, pb, x) where {Tf}
 end
 
 function oracles_structure!(
-    di::StructDerivativeInfo{Tf}, ::FirstOrderDerivativeInfo{Tf}, pb, M, x::Vector{Tf}
+    di::StructDerivativeInfo{Tf},
+    fo_di::FirstOrderDerivativeInfo{Tf},  # 添加命名以访问一阶信息
+    pb,
+    M,
+    x::Vector{Tf},
 ) where {Tf}
-    @info "calling generic structure oracle"
     di.x .= x
 
-    di.hx .= NSP.h(M, x)
-    di.Jacₕ .= NSP.Jac_h(M, x)
+    di.hx[1:end-1] .= NSP.h(M, x)
+    di.hx[end] = (dot(x, x) - 1)
+    di.Jacₕ[1:end-1,:] .= NSP.Jac_h(M, x)
+    di.Jacₕ[end,:] .=2*x
     di.∇Fx .= NSP.∇F̃(pb, M, x)
     di.λ .= get_lambda(di.Jacₕ, di.∇Fx)
-
-    di.∇²Lx .= NSP.∇²L(pb, M, x, di.λ)
-    return nothing
+    di.∇²Lx .= NSP.∇²L(pb, M, x, di.λ[1:end-1])-2*di.λ[end]*I
+    return true
 end
 
 function get_lambda(Jacₕ::Matrix{Tf}, d::Vector{Tf}) where {Tf}
     @debug "rank should be maximal for quadratic SQP rate" rank(Jacₕ) size(Jacₕ)
-
-    Q, R = qr(Jacₕ)
-    w = Q * ((R * R') \ (R * d))
+    w=-pinv(Jacₕ*Jacₕ')*Jacₕ*d
     return w
 end
+
