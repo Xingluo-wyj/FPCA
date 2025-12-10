@@ -58,25 +58,26 @@ function update_iterate!(state::LocalCompositeNewtonState{Tf,Tm}, opt::LocalComp
 
     ## Step
     oracles_structure!(state.di_struct, state.di_fo, pb, M, x)
-
     info = Dict()
-    d = get_SQP_direction_CG(pb, M, x, state.di_struct; info)
-
+    #d = get_SQP_direction_CG(pb, M, x, state.di_struct; info)
+    d = get_SQP_direction_inexactNewton(pb, M, x, state.di_struct; info)
     # @warn "No Maratos"
     addMaratoscorrection!(d, pb, M, x, state.di_struct.Jacₕ)
-
-    oracles_firstorder!(state.di_fonext, pb, state.x + d)
+    y=LinearAlgebra.normalize(state.x-d)##potive definite x+d 
+    oracles_firstorder!(state.di_fonext, pb, y)
     Fxd = state.di_fonext.Fx
-    if Fxd < Fx
-        state.x .+= d
-
+   
+    if Fxd < Fx 
+        state.x .-= d
+        state.x=LinearAlgebra.normalize(state.x)
         update_difirstorder!(state)
         state.di_fonext = state.di_fo
-    # else
+    #else
     #     @warn "not changing point" Fxd Fx
     end
     state.M = M
-
+  
+        
     return (; :normd => norm(d), :M => M),
-    norm(d) < 10 * eps(Tf) ? NSS.problem_solved : NSS.iteration_completed
+    abs(norm(d))<1e-8|| abs(Fxd-Fx)/abs(Fx)<1e-8 ? NSS.problem_solved : NSS.iteration_completed
 end
