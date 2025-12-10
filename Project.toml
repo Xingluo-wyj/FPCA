@@ -15,6 +15,7 @@ NonSmoothSolvers = "f37854fc-8eb2-424e-b8d4-38d006def410"
 PlotsOptim = "57061203-8ea9-4995-b8fb-f2bb2c372b50"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 
 [compat]
 EigenDerivatives = "=v0.1.2"
