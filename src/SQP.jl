@@ -1,24 +1,28 @@
-function get_SQP_direction_CG(
-    pb, M, x::Vector{Tf}, structderivative; info=Dict()
-) where {Tf}
-    Z = nullspace(structderivative.Jacₕ)         # tangent space basis
-
+#function get_SQP_direction_CG(
+#    pb, M, x::Vector{Tf}, structderivative; info=Dict()
+#) where {Tf}
+    #J=[structderivative.Jacₕ;2*x']
+    #Z = nullspace(J)    # tangent space basis
+   
     ## 1. Restoration step
-    r = zeros(Tf, size(x))
-    if norm(structderivative.hx) > 1e1 * eps(Tf)
-        r = IterativeSolvers.lsmr(structderivative.Jacₕ, -structderivative.hx)
-    end
-
+    #r = zeros(Tf, length(x))
+    #if norm(structderivative.hx) > 1e1 * eps(Tf) 
+    #    r = IterativeSolvers.lsmr(J, -[structderivative.hx;x'x-1])
+      
+    #end
+    
     ## 2. Reduced gradient and RHS
-    g = Z' * structderivative.∇Fx
-    v = -g - Z' * structderivative.∇²Lx * r
+    #g = Z' * structderivative.∇Fx
+    #v = -g - Z' * structderivative.∇²Lx * r
+    ## 3. Linear system solve (robust)
 
-    ## 3. Linear system solve
-    u = (Z' * structderivative.∇²Lx * Z) \ v
-
-    d = r + Z * u
-    return d
-end
+    #u = pinv(Z' * structderivative.∇²Lx * Z )*v
+    
+    ## 4. Compute d
+    ## linear search return d
+    #d = r + Z * u
+    #return d
+#end
 
 # function get_SQP_direction_JuMP(pb, M, x::Vector; regularize=false)
 #     @assert manifold_codim(M) > 0
@@ -52,17 +56,48 @@ end
 
 #     return d, Jacₕ
 # end
-
-function addMaratoscorrection!(d::Vector{Tf}, pb, M, x, Jacₕ) where {Tf}
-    hxd = zeros(Tf, size(Jacₕ, 1))
-    if isa(pb, Eigmax)
-        h!(hxd, M.eigmult, x .+ d, g(pb, x .+ d))
-    else
-        hxd = NSP.h(M, x .+ d)
+function get_SQP_direction_inexactNewton(
+    pb, M, x::Vector{Tf}, structderivative; 
+    η_k=0.1, max_cg_iter=100, info=Dict()
+) where {Tf}
+    J = [structderivative.Jacₕ; 2*x']
+    Z = nullspace(J)
+    # Restoration step
+    r = zeros(Tf, length(x))
+    if norm(structderivative.hx) > 1e1 * eps(Tf) 
+        r = IterativeSolvers.lsmr(J, -[structderivative.hx; x'x - 1])
     end
+    
+    # Reduced system
+    g = Z' * structderivative.∇Fx
+    v = -g - Z' * structderivative.∇²Lx * r
+    A = Z' * structderivative.∇²Lx * Z
+    
+    # Inexact solve with CG
+    u, ch = IterativeSolvers.cg(
+        A, v;
+        abstol=η_k * norm(v),
+        maxiter=max_cg_iter,
+        log=true
+    )
+    
+    # 兼容性处理：获取残差
+    info[:cg_converged] = ch.isconverged
+    info[:cg_iters] = ch.iters
+    info[:cg_residual] = hasproperty(ch, :residual_norm) ? ch.residual_norm[end] : norm(A*u - v)
+    
+    return r + Z * u
+end
+function addMaratoscorrection!(d::Vector{Tf}, pb, M, x, Jacₕ) where {Tf}
+ 
+    hxd= zeros(Tf, size(Jacₕ,1))
+    hxd[1:end-1] =NSP.h(M, x .+ d) 
+    hxd[end] = dot(x .+ d, x .+ d) - 1
+    
     norm(hxd) < 1e1 * eps(Tf) && return
     dMaratos = IterativeSolvers.lsmr(Jacₕ, -hxd)
     @debug "Maratos SOC: " norm(hx + Jacₕ * dMaratos)
     d .+= dMaratos
     return
 end
+
