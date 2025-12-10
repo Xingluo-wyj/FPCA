@@ -1,6 +1,13 @@
-get_legendname(obj::NSBFGS) = "nsBFGS"
-get_legendname(obj::GradientSampling) = "GradientSampling"
-get_legendname(obj::LocalCompositeNewtonOpt) = "LocalNewton"
+
+PlotsOptim.get_legendname(obj::LocalCompositeNewtonOpt) = "LocalNewton"
+
+# Prefer a raster backend to avoid LaTeX/PGF dependency when saving figures
+try
+    @eval using Plots
+    gr()
+catch e
+    @warn "Could not switch Plots backend to GR; LaTeX-based output may still be used." e
+end
 
 getabsc_time(optimizer, trace) = [state.time for state in trace]
 
@@ -30,7 +37,6 @@ function treatproxsteps(pb, tr, Mopt::MaxQuadManifold, xopt::Vector{Tf}) where {
     for os in tr[1:end]
         x = os.additionalinfo.x
         gx = NSP.g(pb, x)
-
         # Computing steps low, up
         r = length(Mopt.active_fᵢ_indices)
         γlow, γup = get_γlowγupmax(gx, r)
@@ -56,14 +62,12 @@ end
 function buildfigures(optimdata, tr, pb, xopt, Mopt, Fopt, pbname::String; NUMEXPS_OUTDIR, plotgamma = true, includelegend = false)
     @info "building figures for $pbname"
 
+    # 1. 绘制步长参数γ图（可选）
     if plotgamma
         stepinfo = treatproxsteps(pb, tr, Mopt, xopt)
-
         optimdatagamma = OrderedDict(
-            L"\gamma low(x_k)" =>
-                [(itstepinfo.γlow, itstepinfo.distopt) for itstepinfo in stepinfo],
-            L"\bar{\gamma}(x_k)" =>
-                [(itstepinfo.γup, itstepinfo.distopt) for itstepinfo in stepinfo],
+            L"\gamma low(x_k)" => [(itstepinfo.γlow, itstepinfo.distopt) for itstepinfo in stepinfo],
+            L"\bar{\gamma}(x_k)" => [(itstepinfo.γup, itstepinfo.distopt) for itstepinfo in stepinfo],
             L"\gamma_k" => [(itstepinfo.γₖ, itstepinfo.distopt) for itstepinfo in stepinfo],
         )
 
@@ -75,21 +79,20 @@ function buildfigures(optimdata, tr, pb, xopt, Mopt, Fopt, pbname::String; NUMEX
             getord_gamma;
             xlabel=L"\| x_k - x^\star\|",
             ylabel=L"",
-            # nmarks = 1000,
             xmode="log",
             includelegend=false,
         )
         try
-            savefig(fig, joinpath(NUMEXPS_OUTDIR, pbname * "_gamma"))
+            PlotsOptim.savefig(fig, joinpath(NUMEXPS_OUTDIR, pbname * "_gamma"))
         catch e
-            @warn "Error while building figure" e
+            @warn "Error while building gamma figure" e
         end
     end
-
-    # Suboptimality
+    
+    # 2. 绘制子优性随时间变化图
     getabsc_time(optimizer, trace) = [state.time for state in trace]
     getord_subopt(optimizer, trace) = [state.Fx - Fopt for state in trace]
-    fig = plot_curves(
+    fig_subopt = plot_curves(
         optimdata,
         getabsc_time,
         getord_subopt;
@@ -99,9 +102,30 @@ function buildfigures(optimdata, tr, pb, xopt, Mopt, Fopt, pbname::String; NUMEX
         includelegend,
     )
     try
-        savefig(fig, joinpath(NUMEXPS_OUTDIR, pbname * "_time_subopt"))
+        PlotsOptim.savefig(fig_subopt, joinpath(NUMEXPS_OUTDIR, pbname * "_time_subopt"))
     catch e
-        @warn "Error while building figure" e
+        @warn "Error while building suboptimality figure" e
     end
+    
+    # 3. 新增：绘制距离最优解随迭代次数的变化图
+    getabsc_iter(optimizer, trace) = 0:(length(trace)-1)  # 迭代次数从0开始
+    getord_dist(optimizer, trace) = [norm(state.additionalinfo.x - xopt)+1e-15 for state in trace]
+    
+    fig_dist = plot_curves(
+        optimdata,
+        getabsc_iter,
+        getord_dist;
+        xlabel="Iteration ",
+        ylabel=L"\| x_k - x^\star \|",
+        nmarks=1000,
+        ymode="log",  # 使用对数坐标便于观察收敛
+        includelegend=includelegend,
+    )
+    try
+        PlotsOptim.savefig(fig_dist, joinpath(NUMEXPS_OUTDIR, pbname * "_iter_dist"))
+    catch e
+        @warn "Error while building distance figure" e
+    end
+    
     return true
 end
