@@ -1,18 +1,16 @@
 module LocalCompositeNewton
-
-# using MathOptInterface
-# using JuMP
-# using OSQP
+using CSV, DataFrames, Statistics
 using IterativeSolvers
-
 using LinearAlgebra
 using Printf
-using DataStructures
 using Random
 using EigenDerivatives
 using NonSmoothProblems
 using NonSmoothSolvers
-
+using IterativeSolvers
+using DelimitedFiles
+import DataStructures
+using DataStructures
 import NonSmoothSolvers:
     initial_state,
     print_header,
@@ -21,16 +19,26 @@ import NonSmoothSolvers:
     update_iterate!,
     get_minimizer_candidate,
     has_converged
+import PlotsOptim: 
+    get_legendname
+using PlotsOptim    
 
-using PlotsOptim
-import PlotsOptim: get_legendname
+
 using LaTeXStrings
 using DocStringExtensions
+include("c:\\Users\\wuyoujia\\Desktop\\manifold optimazation\\LocalCompositeNewton.jl\\src\\prox_max.jl")
+include("oracles.jl")
+include("guessstructure.jl")
+include("SQP.jl")
+include("localNewton.jl")
+include("problems/fpca.jl")
+include("makeplots.jl")
 
 # Setting numerical experiments default output directory
 const NUMEXPS_OUTDIR_DEFAULT = joinpath(
-    dirname(pathof(LocalCompositeNewton)), "..", "numexps_output"
+    @__DIR__, "..", "numexps_output"
 )
+
 function __init__()
     if !isdir(NUMEXPS_OUTDIR_DEFAULT)
         mkdir(NUMEXPS_OUTDIR_DEFAULT)
@@ -39,29 +47,8 @@ function __init__()
     return nothing
 end
 
-include("prox_max.jl")
-include("oracles.jl")
-include("oracle_maxquad.jl")
-include("oracle_eigmax.jl")
-include("oracle_MCPLeastSquares.jl")
-include("guessstructure.jl")
 
-include("SQP.jl")
-include("localNewton.jl")
-
-# Float64 experiments
-include("problems/maxquadBGLS.jl")
-include("problems/eigmax.jl")
-# BigFloat experiments
-include("problems/maxquadBGLS_BigFloat.jl")
-include("problems/eigmax_BigFloat.jl")
-# Nonconvex experiments
-include("problems/nonconvex_maxquad.jl")
-include("problems/nonconvex_MCP.jl")
-
-
-include("makeplots.jl")
 
 export optimize!
 
-end # module
+end 
