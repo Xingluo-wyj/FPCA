@@ -1,4 +1,4 @@
-#Introduction
+# Introduction
 We proposed a new method to solve Fair PCA problem based on Manifold Optimazation.
 
 # mw-samadi
